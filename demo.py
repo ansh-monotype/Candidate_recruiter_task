@@ -341,8 +341,7 @@ def get_employee_data_hardcoded():
 # Get all links of employees
 def call_proxycurl_company(linkedin_url):
     api_endpoint = "https://nubela.co/proxycurl/api/linkedin/company/employees/"
-    # api_key = os.getenv("PROXYCURL_API_KEY")
-    api_key = "OtYiaAt4nrm6FemcvANrAQ"
+    api_key = os.getenv("PROXYCURL_API_KEY")
     headers = {'Authorization': 'Bearer ' + api_key}
 
     params = {
@@ -369,8 +368,7 @@ def call_proxycurl_company(linkedin_url):
 # Get details of employee from proxycurl
 def get_employee_profile(linkedin_url):
     api_endpoint = "https://nubela.co/proxycurl/api/v2/linkedin"
-    # api_key = os.getenv("PROXYCURL_API_KEY")
-    api_key = "OtYiaAt4nrm6FemcvANrAQ"
+    api_key = os.getenv("PROXYCURL_API_KEY")
     headers = {'Authorization': 'Bearer ' + api_key}
 
     params = {
