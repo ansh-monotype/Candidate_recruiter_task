@@ -347,7 +347,7 @@ def call_proxycurl_company(linkedin_url):
     params = {
         "country": 'in',
         "enrich_profiles": "skip",
-        "page_size": 2,
+        "page_size": 5,
         "employment_status": "current",
         "sort_by": "recently-joined",
         "resolve_numeric_id": "false",
@@ -469,9 +469,14 @@ if submit_button:
             # employees_data = contents['employees']
             # for details in employees_data:
             job_description = get_job_description(text)
-            print(job_description)
-            print(type(job_description))
-            job_description = json.loads(job_description)
+            st.write("1.",job_description.raw)
+
+
+            job_description = job_description.raw
+            st.write("2.",job_description)
+
+            # job_description = json.dumps(job_description_dict)
+            # st.write("3.",job_description)
 
             st.write("Fetching profile URLs from linkedin")
             contents = call_proxycurl_company(linkedin_url)
@@ -517,17 +522,17 @@ if submit_button:
                 confidence_scoring_task = Task(
                     description=(
                         f"""
-                        From the job given context, provide the confidence score of that person for the job:
-                            {job_description}
+                        From the job descption, provide the confidence score of that person for the job:
+                            Job Description (JD): {job_description}
     
                         Make sure to follow the given set of rules:
                         1) Perform a detailed analysis of the context and identify the required fields for matching the profile with the job description.
                         2) Ensure that no data is missed and the fields are accurately analyzed.
-                        3) Provide the confidence score on a scale of 5 based on the match of the profile with the job description. The confidence score should comprise:
-                            - 50% for Skills
-                            - 30% for Experience
-                            - 10% for Designation 
-                            - 10% for Location
+                        3) Provide the confidence score on a scale of 100 based on the match of the profile with the job description. The confidence score should comprise:
+                            - 50% for Skills matching the jd
+                            - 30% for Total Experience in range as mentioned in jd
+                            - 10% for Designation matching
+                            - 10% for Location matching
                         4) Use your expertise and knowledge to calculate the confidence score based on the above weightings.
                         5) The output should contain the following fields:
                             1. Name 
@@ -572,9 +577,12 @@ if submit_button:
         # Process the results
         parsed_data = [json.loads(record.raw) for record in results]
         df = pd.json_normalize(parsed_data)
-        st.dataframe(df)
+
+        sort_df = df.sort_values(by='Confidence Score', ascending=False).reset_index(drop=True)
+        st.dataframe(sort_df)
         # Save to Excel
         df.to_excel("results.xlsx", index=False)
+        sort_df.to_excel("sorted_results.xlsx", index=False)
         st.success("Results saved to results.xlsx")
 else:
     st.write("Please upload a PDF file and enter the company name.")
