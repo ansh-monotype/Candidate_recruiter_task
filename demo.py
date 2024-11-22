@@ -6,8 +6,25 @@ import time
 import json
 import requests
 import pandas as pd
+import streamlit as st
+import PyPDF2
 
 load_dotenv()
+default_llm = AzureChatOpenAI(
+    azure_endpoint='',
+    model=os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME'),
+    openai_api_version=os.getenv('OPENAI_API_VERSION'),
+    temperature=0
+)
+
+os.environ['AZURE_OPENAI_ENDPOINT'] = os.getenv('AZURE_OPENAI_ENDPOINT')
+os.environ['AZURE_OPENAI_CHAT_DEPLOYMENT_NAME'] = os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME')
+os.environ['MODEL_NAME'] = 'Azure'
+os.environ['AZURE_OPENAI_API_KEY'] = os.getenv('AZURE_OPENAI_API_KEY')
+os.environ['AZURE_OPENAI_API_VERSION'] = '2023-08-01-preview'
+os.environ['AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT_NAME'] = os.getenv('AZURE_OPENAI_EMBEDDINGS')
+
+
 # Extract vacacny, Skillsets, experince, education qulifaction
 def get_job_description():
     return '''
@@ -1458,164 +1475,6 @@ def get_employees_data():
 
     }
 
-
-
-
-default_llm = AzureChatOpenAI(
-    azure_endpoint='',
-    model=os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME'),
-    openai_api_version=os.getenv('OPENAI_API_VERSION'),
-    temperature=0
-)
-
-os.environ['AZURE_OPENAI_ENDPOINT'] = os.getenv('AZURE_OPENAI_ENDPOINT')
-os.environ['AZURE_OPENAI_CHAT_DEPLOYMENT_NAME'] = os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME')
-os.environ['MODEL_NAME'] = 'Azure'
-os.environ['AZURE_OPENAI_API_KEY'] = os.getenv('AZURE_OPENAI_API_KEY')
-os.environ['AZURE_OPENAI_API_VERSION'] = '2023-08-01-preview'
-os.environ['AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT_NAME'] = os.getenv('AZURE_OPENAI_EMBEDDINGS')
-
-
-job_description = get_job_description()
-
-fields_identifier_agent = Agent(
-    role="Fields Identifier",
-    goal="Accurately identify different fields required from the given context.",
-    verbose=True,
-    llm=default_llm,
-    allow_delegation=False,
-    backstory="""
-    You are a skilled Fields Identifier. You have been working as Human Resource Manager for a long time. 
-    You have a good understanding of correctly manuvering through the fields required for the given context.
-    The context might be a page source or a document or a text or even a json, you can easily identify the fields required.
-    You are meticulous and detail-oriented. You dont make any mistakes or mismatch the fields.The fields you need to extract are:
-        1. Name 
-        2. Linkedin url 
-        3. Experiences
-        4. Experience in Years
-        5. Skills
-        6. Location
-""")
-
-
-confidence_scorer_agent = Agent(
-    role="Confidence Scorer",
-    goal="Accurately identify if the profile of given person is a match with the given job description and provide the confidence score on the scale of 5.",
-    verbose=True,
-    llm=default_llm,
-    allow_delegation=False,
-    backstory="""
-    You are a skilled Confidence Scorer. You have been working as Human Resource Manager for a long time. You know a lot about different jobs.
-    You have a good people skills and can easily identify if the profile of given person is a match with the given job description.
-    You can accurately provide the confidence score on the scale of 5 based on the match of the profile with the job description.
-    You are meticulous and detail-oriented. You need to output the given fields:
-            1. Name 
-            2. Linkedin url 
-            3. Experiences
-            4. Experience in Years
-            5. Skills
-            6. Location
-            7. Confidence Score
-            8. Reasoning
-""")
-
-results = []
-def get_data():
-    contents = get_employees_data()
-    employees = contents['employees']
-    for details in employees:
-        field_identification_task = Task(
-            description=(
-            f"""
-                ```{details}```
-
-                From the context given above, identify the given fields:
-                1. Name 
-                2. Linkedin url 
-                3. Experiences
-                4. Last company role
-                5. Total Experience in Years
-                6. Skills
-                7. Latest education
-                7. Location
-                
-                Make sure to follow the given set of rules
-                1) Perform a detailed analysis of the context and extract the required fields.
-                2) Make sure that no data is missed out and the fields are accurately extracted.
-                3) If any field is not available, provide the output as "Unavailable".
-                4) Make sure these are the only fields in the output as the following process will not work with any other fields.
-                5) Provide the output in the json format.
-
-                Do not provide any other texts or information or symbols like ``` in the output as it will not work with the further process.
-                Make sure the provide the output in the json format.
-                Important note: Every step mentioned above must be followed to get the required results.
-                Do not provide any other texts or information in the output as it will not work with the further process.
-                Do not include ``` or any other such characters in the output.
-            """
-            ),
-            agent=fields_identifier_agent,
-            expected_output="A json with the values of the required fields",
-        )
-        confidence_scoring_task = Task(
-            description=(
-            f"""
-                From the job given context, provide the confidence score of that person for the job:
-                    {job_description}
-                
-                Make sure to follow the given set of rules
-                1) Perform a detailed analysis of the context and identify the required fields for matching the profile with the job description.
-                2) Make sure that no data is missed out and the fields are accurately analysed.
-                3) Provide the confidence score on the scale of 5 based on the match of the profile with the job description.
-                4) Use your expertise and knowledge to provide the confidence score.
-                5) The output should contain the given fields:
-                    1. Name 
-                    2. Linkedin url 
-                    3. Experiences
-                    4. Last company role
-                    5. Total Experience in Years
-                    6. Skills
-                    7. Location
-                    8. Confidence Score
-                    9. Reasoning
-                6) Use your knowledge to provide the fields and the confidence score.
-                7) Make sure these are the only fields in the output as the following process will not work with any other fields.
-                8) Provide the output in the json format.
-
-                Do not provide any other texts or information or symbols like ``` in the output as it will not work with the further process.
-                Make sure the provide the output in the json format.
-                Important note: Every step mentioned above must be followed to get the required results.
-                Do not provide any other texts or information in the output as it will not work with the further process.
-                Do not include ``` or any other such characters in the output.
-            """
-            ),
-            agent= confidence_scorer_agent,
-            context = [field_identification_task],
-            expected_output="A json with the values of the required fields"
-        )
-        try:
-            trip_crew_subsidiary_research = Crew(
-                agents=[
-                    fields_identifier_agent, confidence_scorer_agent
-                ],
-                tasks=[
-                    field_identification_task, confidence_scoring_task
-                ],
-                verbose=True,
-                allow_delegation=False,
-                cache=True
-            )
-            result = trip_crew_subsidiary_research.kickoff()
-            results.append(result)
-        except Exception as e:
-            print(f"Exception when getting links for company structures for private company: {e}")
-            return {'error': str(e)}
-get_data()
-print(results)
-parsed_data = [json.loads(record.raw) for record in results]
-df = pd.json_normalize(parsed_data)
-df.to_excel("./results.xlsx")
-
-
 def call_proxycurl_company(linkedin_url):
     api_endpoint = "https://nubela.co/proxycurl/api/linkedin/company/resolve"
     api_key = os.getenv("proxycurl_api_key")
@@ -1641,3 +1500,213 @@ def call_proxycurl_company(linkedin_url):
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
         return None
+
+
+
+
+
+job_description = {
+  "job_role": "AI Engineer I / AI Engineer II",
+  "skillsets": [
+    "Machine Learning concepts, algorithms, and techniques",
+    "Prompt engineering",
+    "Custom chat bots",
+    "Generative image models (Midjourney, DALLE, Stable Diffusion)",
+    "Deep learning frameworks (TensorFlow, PyTorch)",
+    "Programming languages (Python, R)",
+    "Data wrangling and manipulation tools (pandas, NumPy)",
+    "Cloud platforms (AWS, Azure, GCP)",
+    "Computer vision",
+    "Natural language processing"
+  ],
+  "experience": "0-4 years of hands-on experience in AI and ML engineering",
+  "education_qualification": [
+    "Bachelor's or Master's degree in Computer Science, Machine Learning, or a related field"
+  ],
+  "preferred_skills": [
+    "Strong understanding of computer vision and natural language processing",
+    "Published research papers or contributions to the AI/ML community"
+  ],
+  "responsibilities": [
+    "Design, development and deployment of AI/ML solutions and models",
+    "Understand business requirements, collect, clean, prepare data for machine learning",
+    "Translate requirements into AI/ML solutions",
+    "Implement best practices and innovative ideas",
+    "Conduct in-depth research and apply new AI/ML advancements",
+    "Develop and maintain scalable, production-ready code for AI models",
+    "Implement and maintain data pipelines and ensure data quality",
+    "Work on model optimization and scalability"
+  ]
+}
+
+fields_identifier_agent = Agent(
+    role="Fields Identifier",
+    goal="Accurately identify different fields required from the given context.",
+    verbose=True,
+    llm=default_llm,
+    allow_delegation=False,
+    backstory="""
+    You are a skilled Fields Identifier. You have been working as Human Resource Manager for a long time. 
+    You have a good understanding of correctly manuvering through the fields required for the given context.
+    The context might be a page source or a document or a text or even a json, you can easily identify the fields required.
+    You are meticulous and detail-oriented. You dont make any mistakes or mismatch the fields.The fields you need to extract are:
+        1. Name 
+        2. Linkedin url 
+        3. Current job role
+        4. Experience in Years
+        5. Skills
+        6. Location
+        7. Education Qualification
+""")
+
+
+confidence_scorer_agent = Agent(
+    role="Confidence Scorer",
+    goal="Accurately identify if the profile of given person is a match with the given job description and provide the confidence score on the scale of 100.",
+    verbose=True,
+    llm=default_llm,
+    allow_delegation=False,
+    backstory="""
+        You are a skilled Confidence Scorer with extensive experience as a Human Resource Manager. You possess deep knowledge of various job roles and industries.
+        Your excellent people skills enable you to accurately assess whether a person's profile aligns with a given job description.
+        You provide a Confidence Score on a scale of 100 based on the match between the profile and the job description. This score is calculated as follows:
+            - 50% based on Skills
+            - 30% based on Experience
+            - 10% based on Designation
+            - 10% based on Location
+        You are meticulous and detail-oriented, ensuring each assessment is thorough and precise. You need to output the following fields:
+            1. Name 
+            2. LinkedIn URL 
+            3. Current Job Role
+            4. Experience in Years
+            5. Skills
+            6. Location
+            7. Education Qualification
+            8. Confidence Score
+""")
+
+st.title("Resume Analyzer")
+
+# File uploader for PDF
+uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+
+# Input for company name
+company_name = st.text_input("Enter Company Name")
+
+# Submit button
+submit_button = st.button("Submit")
+
+# Handle the submit action
+if submit_button:
+    if uploaded_file is not None and company_name.strip() != "":
+        # status_placeholder.text("Step 1: Reading PDF file...")
+        # Read the PDF file
+        # pdf_reader = PyPDF2.PdfReader(uploaded_file)
+        # text = ""
+        # for page in pdf_reader.pages:
+        #     text += page.extract_text()
+
+        # Here you might split the text into individual resumes if the PDF contains multiple resumes
+        # For simplicity, we'll assume the PDF contains a single resume
+        # employees = [{'text': text}]
+        results = []
+        st.write("Starting Each employee processing and Confidence score")
+        def get_data():
+            contents = get_employees_data()
+            employees_data = contents['employees']
+            for details in employees_data:
+                field_identification_task = Task(
+                    description=(
+                        f"""
+                        ```{details}```
+    
+                        From the context given above, identify the following fields:
+                        1. Name 
+                        2. Linkedin url 
+                        3. Current job role
+                        4. Experience in Years
+                        5. Skills
+                        6. Location
+                        7. Latest Education Qualification
+    
+                        Make sure to follow the given set of rules:
+                        1) Perform a detailed analysis of the context and extract the required fields.
+                        2) Ensure that no data is missed and the fields are accurately extracted.
+                        3) If the **Skills** field is not available, extract or derive it from the **headline**, **about section**, or **experiences section**. For all other fields, if not available, provide the output as "Unavailable".
+                        4) Ensure that these are the only fields in the output, as the following process will not work with any other fields.
+                        5) Provide the output in JSON format.
+    
+                        Do not provide any additional text, information, or symbols like ``` in the output, as it will not work with the further process.
+                        Make sure to provide the output strictly in JSON format.
+                        Important note: Every step mentioned above must be followed to get the required results.
+                        Do not include ``` or any other such characters in the output.
+                        """
+                    ),
+                    agent=fields_identifier_agent,
+                    expected_output="A json with the values of the required fields",
+                )
+                confidence_scoring_task = Task(
+                    description=(
+                        f"""
+                        From the job given context, provide the confidence score of that person for the job:
+                            {json.dumps(job_description)}
+    
+                        Make sure to follow the given set of rules:
+                        1) Perform a detailed analysis of the context and identify the required fields for matching the profile with the job description.
+                        2) Ensure that no data is missed and the fields are accurately analyzed.
+                        3) Provide the confidence score on a scale of 5 based on the match of the profile with the job description. The confidence score should comprise:
+                            - 50% for Skills
+                            - 30% for Experience
+                            - 10% for Designation 
+                            - 10% for Location
+                        4) Use your expertise and knowledge to calculate the confidence score based on the above weightings.
+                        5) The output should contain the following fields:
+                            1. Name 
+                            2. Linkedin URL 
+                            3. Current Job Role
+                            4. Experience in Years
+                            5. Skills
+                            6. Location
+                            7. Education Qualification
+                            8. Confidence Score
+                            9. Reasoning
+                        6) Ensure that only the above fields are included in the output, as the subsequent process relies on this specific structure.
+                        7) Provide the output in JSON format.
+    
+                        **Important Instructions:**
+                        - Do not include any additional text, information, or symbols such as ``` in the output, as it will interfere with the further processing.
+                        - Adhere strictly to the JSON format for the output.
+                        - Every step mentioned above must be followed precisely to achieve the desired results.
+                        - In the `Reasoning` field, provide a clear explanation of why the confidence score was assigned based on the analysis of skills, experience, designation, and/or location.
+                        """
+                    ),
+                    agent=confidence_scorer_agent,
+                    context=[field_identification_task],
+                    expected_output="A json with the values of the required fields"
+                )
+                try:
+                    crew = Crew(
+                        agents=[fields_identifier_agent, confidence_scorer_agent],
+                        tasks=[field_identification_task, confidence_scoring_task],
+                        verbose=True,
+                        allow_delegation=False,
+                        cache=True
+                    )
+                    result = crew.kickoff()
+                    results.append(result)
+                except Exception as e:
+                    st.error(f"Exception when processing the data: {e}")
+                    return {'error': str(e)}
+
+
+        get_data()
+        # Process the results
+        parsed_data = [json.loads(record.raw) for record in results]
+        df = pd.json_normalize(parsed_data)
+        st.dataframe(df)
+        # Save to Excel
+        df.to_excel("results.xlsx", index=False)
+        st.success("Results saved to results.xlsx")
+else:
+    st.write("Please upload a PDF file and enter the company name.")
+
