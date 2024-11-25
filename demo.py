@@ -438,10 +438,10 @@ confidence_scorer_agent = Agent(
             8. Confidence Score
 """)
 
-st.title("Resume Analyzer")
+st.title("TalentFlow AI")
 
 # File uploader for PDF
-uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+uploaded_file = st.file_uploader("Choose The JD PDF File", type="pdf")
 
 # Input for company name
 linkedin_url = st.text_input("Enter Linkedin URL Company")
