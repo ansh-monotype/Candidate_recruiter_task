@@ -469,11 +469,11 @@ if submit_button:
             # employees_data = contents['employees']
             # for details in employees_data:
             job_description = get_job_description(text)
-            st.write("1.",job_description.raw)
+            # st.write("1.",job_description.raw)
 
 
             job_description = job_description.raw
-            st.write("2.",job_description)
+            # st.write("2.",job_description)
 
             # job_description = json.dumps(job_description_dict)
             # st.write("3.",job_description)
