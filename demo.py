@@ -8,6 +8,7 @@ import requests
 import pandas as pd
 import streamlit as st
 import PyPDF2
+from datetime import datetime
 
 load_dotenv()
 default_llm = AzureChatOpenAI(
@@ -349,7 +350,7 @@ def call_proxycurl_company(linkedin_url):
         "enrich_profiles": "skip",
         "page_size": 5,
         "employment_status": "current",
-        "sort_by": "recently-joined",
+        "sort_by": "oldest",
         "resolve_numeric_id": "false",
         "url": linkedin_url
     }
@@ -480,6 +481,7 @@ if submit_button:
 
             st.write("Fetching profile URLs from linkedin")
             contents = call_proxycurl_company(linkedin_url)
+            employee_details_list = []
 
             # contents = get_employees_data()
             employees = contents['employees']
@@ -487,6 +489,8 @@ if submit_button:
             for employee in employees:
                 linkedin_profile = employee['profile_url']
                 details = get_employee_profile(linkedin_profile)
+                employee_details_list.append(details)
+
 
                 field_identification_task = Task(
                     description=(
@@ -507,7 +511,8 @@ if submit_button:
                         2) Ensure that no data is missed and the fields are accurately extracted.
                         3) If the **Skills** field is not available, extract or derive it from the **headline**, **about section**, or **experiences section**. For all other fields, if not available, provide the output as "Unavailable".
                         4) Ensure that these are the only fields in the output, as the following process will not work with any other fields.
-                        5) Provide the output in JSON format.
+                        5) All the fields values should be in string format only
+                        6) Provide the output in JSON format.
     
                         Do not provide any additional text, information, or symbols like ``` in the output, as it will not work with the further process.
                         Make sure to provide the output strictly in JSON format.
@@ -543,9 +548,10 @@ if submit_button:
                             6. Location
                             7. Education Qualification
                             8. Confidence Score
-                            9. Reasoning
+                            9. Reasoning, in a single paragraph
                         6) Ensure that only the above fields are included in the output, as the subsequent process relies on this specific structure.
-                        7) Provide the output in JSON format.
+                        7) All the fields values should be in string format only
+                        8) Provide the output in JSON format.
     
                         **Important Instructions:**
                         - Do not include any additional text, information, or symbols such as ``` in the output, as it will interfere with the further processing.
@@ -572,17 +578,48 @@ if submit_button:
                     st.error(f"Exception when processing the data: {e}")
                     return {'error': str(e)}
 
+            current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            with open(f'./Profiles/employee_details_{current_time}.json', 'w') as f:
+                json.dump(employee_details_list, f, indent=4)
+
 
         get_data(text)
         # Process the results
-        parsed_data = [json.loads(record.raw) for record in results]
+        parsed_data = []
+
+        for record in results:
+            try:
+                parsed_data.append(json.loads(record.raw))
+            except json.JSONDecodeError as e:
+                print(f"Error decoding JSON: {e}. Skipping this record.")
+            except Exception as e:
+                print(f"An unexpected error occurred: {e}. Skipping this record.")
         df = pd.json_normalize(parsed_data)
+
+        def convert_to_string(x):
+            if isinstance(x, list):
+                return ', '.join(map(str, x))
+            elif pd.isnull(x):
+                return ''
+            else:
+                return str(x)
+
+        # Apply the function to all columns
+        for column in df.columns:
+            df[column] = df[column].apply(convert_to_string)
 
         sort_df = df.sort_values(by='Confidence Score', ascending=False).reset_index(drop=True)
         st.dataframe(sort_df)
         # Save to Excel
-        df.to_excel("results.xlsx", index=False)
-        sort_df.to_excel("sorted_results.xlsx", index=False)
+        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+        # Create filenames with date and time
+        results_filename = f"results_{current_time}.xlsx"
+        sorted_results_filename = f"sorted_results_{current_time}.xlsx"
+
+        # Save the DataFrames
+        df.to_excel(results_filename, index=False)
+        sort_df.to_excel(sorted_results_filename, index=False)
         st.success("Results saved to results.xlsx")
 else:
     st.write("Please upload a PDF file and enter the company name.")
